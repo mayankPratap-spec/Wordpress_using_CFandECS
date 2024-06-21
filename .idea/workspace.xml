@@ -4,16 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ccf99e23-1bd3-4a21-b90e-13deaac4f948" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/BaseStack.template" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/NetworkStack.template" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/ServiceStack.template" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/Wordpress_site_CF.iml" afterDir="false" />
-    </list>
+    <list default="true" id="ccf99e23-1bd3-4a21-b90e-13deaac4f948" name="Changes" comment="Wordpress site using CF and ECS" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -63,6 +54,15 @@
       <option name="presentableId" value="Default" />
       <updated>1718676401930</updated>
     </task>
+    <task id="LOCAL-00001" summary="Wordpress site using CF and ECS">
+      <option name="closed" value="true" />
+      <created>1718943006353</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1718943006353</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -75,5 +75,9 @@
         </entry>
       </map>
     </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="Wordpress site using CF and ECS" />
+    <option name="LAST_COMMIT_MESSAGE" value="Wordpress site using CF and ECS" />
   </component>
 </project>
