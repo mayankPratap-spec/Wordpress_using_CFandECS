@@ -1,0 +1,357 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Base stack with Security Groups, Load Balancer, Target Group, Listener, Auto Scaling Group, and RDS instance",
+  "Parameters": {
+    "InstanceType": {
+      "Type": "String",
+      "Description": "EC2 instance type",
+      "Default": "t2.micro"
+    },
+    "ClusterName": {
+      "Type": "String",
+      "Description": "ECS Cluster Name",
+      "Default": "Wordpress_cluster"
+    },
+    "DatabaseName": {
+      "Type": "String",
+      "Description": "The WordPress database name",
+      "Default": "wordpressdb"
+    },
+    "DatabaseUser": {
+      "Type": "String",
+      "Description": "The WordPress database admin account username",
+      "Default": "admin",
+      "NoEcho": true
+    },
+    "DatabasePassword": {
+      "Type": "String",
+      "Description": "The WordPress database admin account password",
+      "NoEcho": true,
+      "Default": "MayankPratap"
+    },
+    "DatabaseAllocatedStorage": {
+      "Type": "Number",
+      "Description": "The size of the database (Gb)",
+      "Default": "20"
+    },
+    "DatabaseInstanceClass": {
+      "Type": "String",
+      "Description": "The database instance type",
+      "Default": "db.t3.micro"
+    },
+    "NetworkStack": {
+      "Type": "String",
+      "Description": "Name of the network stack",
+      "Default": "NetworkStack"
+    }
+  },
+  "Resources": {
+    "ECSCluster": {
+      "Type": "AWS::ECS::Cluster",
+      "Properties": {
+        "ClusterName": {
+          "Ref": "ClusterName"
+        }
+      }
+    },
+    "LoadBalancerSG": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for Load Balancer",
+        "VpcId": {
+          "Fn::ImportValue": {
+            "Fn::Sub": "${NetworkStack}-VPCId"
+          }
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": "80",
+            "ToPort": "80",
+            "CidrIp": "0.0.0.0/0"
+          }
+        ]
+      }
+    },
+    "InstanceSG": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for EC2 instances",
+        "VpcId": {
+          "Fn::ImportValue": {
+            "Fn::Sub": "${NetworkStack}-VPCId"
+          }
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": "80",
+            "ToPort": "80",
+            "SourceSecurityGroupId": {
+              "Ref": "LoadBalancerSG"
+            }
+          }
+        ]
+      }
+    },
+    "DBSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for RDS instance",
+        "VpcId": {
+          "Fn::ImportValue": {
+            "Fn::Sub": "${NetworkStack}-VPCId"
+          }
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": "3306",
+            "ToPort": "3306",
+            "SourceSecurityGroupId": {
+              "Ref": "InstanceSG"
+            }
+          }
+        ]
+      }
+    },
+    "LoadBalancer": {
+      "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "Properties": {
+        "Subnets": [
+          {
+            "Fn::ImportValue": {
+              "Fn::Sub": "${NetworkStack}-PublicSubnet1Id"
+            }
+          },
+          {
+            "Fn::ImportValue": {
+              "Fn::Sub": "${NetworkStack}-PublicSubnet2Id"
+            }
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "Ref": "LoadBalancerSG"
+          }
+        ],
+        "Scheme": "internet-facing"
+      }
+    },
+    "TargetGroup": {
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "Properties": {
+        "VpcId": {
+          "Fn::ImportValue": {
+            "Fn::Sub": "${NetworkStack}-VPCId"
+          }
+        },
+        "Port": 80,
+        "Protocol": "HTTP",
+        "HealthCheckProtocol": "HTTP",
+        "HealthCheckPort": "80",
+        "HealthCheckPath": "/",
+        "Matcher": {
+          "HttpCode": "200"
+        },
+        "TargetType": "instance"
+      }
+    },
+    "Listener": {
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Properties": {
+        "LoadBalancerArn": {
+          "Ref": "LoadBalancer"
+        },
+        "DefaultActions": [
+          {
+            "Type": "forward",
+            "TargetGroupArn": {
+              "Ref": "TargetGroup"
+            }
+          }
+        ],
+        "Port": 80,
+        "Protocol": "HTTP"
+      }
+    },
+    "LaunchConfiguration": {
+      "Type": "AWS::AutoScaling::LaunchConfiguration",
+      "Properties": {
+        "ImageId": {
+          "Fn::Sub": "{{resolve:ssm:/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id}}"
+        },
+        "InstanceType": {
+          "Ref": "InstanceType"
+        },
+        "IamInstanceProfile": {
+          "Ref": "InstanceProfile"
+        },
+        "SecurityGroups": [
+          {
+            "Ref": "InstanceSG"
+          }
+        ],
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "#!/bin/bash\n",
+                "echo ECS_CLUSTER=",
+                {
+                  "Ref": "ClusterName"
+                },
+                " >> /etc/ecs/ecs.config\n",
+                "yum install -y aws-cli\n",
+                "yum install -y amazon-ssm-agent\n",
+                "systemctl enable amazon-ssm-agent\n",
+                "systemctl start amazon-ssm-agent\n"
+              ]
+            ]
+          }
+        }
+      }
+    },
+    "AutoScalingGroup": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+        "VPCZoneIdentifier": [
+          {
+            "Fn::ImportValue": {
+              "Fn::Sub": "${NetworkStack}-PublicSubnet1Id"
+            }
+          },
+          {
+            "Fn::ImportValue": {
+              "Fn::Sub": "${NetworkStack}-PublicSubnet2Id"
+            }
+          }
+        ],
+        "LaunchConfigurationName": {
+          "Ref": "LaunchConfiguration"
+        },
+        "MinSize": "2",
+        "MaxSize": "3",
+        "DesiredCapacity": "2",
+        "TargetGroupARNs": [
+          {
+            "Ref": "TargetGroup"
+          }
+        ]
+      }
+    },
+    "DBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupDescription": "Subnets available for the RDS DB Instance",
+        "SubnetIds": [
+          {
+            "Fn::ImportValue": {
+              "Fn::Sub": "${NetworkStack}-PrivateSubnet1Id"
+            }
+          },
+          {
+            "Fn::ImportValue": {
+              "Fn::Sub": "${NetworkStack}-PrivateSubnet2Id"
+            }
+          }
+        ]
+      }
+    },
+    "RDSInstance": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "DBName": {
+          "Ref": "DatabaseName"
+        },
+        "AllocatedStorage": {
+          "Ref": "DatabaseAllocatedStorage"
+        },
+        "DBInstanceClass": {
+          "Ref": "DatabaseInstanceClass"
+        },
+        "Engine": "mysql",
+        "MasterUsername": {
+          "Ref": "DatabaseUser"
+        },
+        "MasterUserPassword": {
+          "Ref": "DatabasePassword"
+        },
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        },
+        "VPCSecurityGroups": [
+          {
+            "Ref": "DBSecurityGroup"
+          }
+        ],
+        "MultiAZ": false,
+        "EngineVersion": "8.0.35",
+        "PubliclyAccessible": false
+      }
+    },
+    "EcsInstanceRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role",
+          "arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM"
+        ]
+      }
+    },
+    "InstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Roles": [
+          {
+            "Ref": "EcsInstanceRole"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "LoadBalancerDNSName": {
+      "Description": "DNS Name of the load balancer",
+      "Value": {
+        "Fn::GetAtt": ["LoadBalancer", "DNSName"]
+      }
+    },
+    "TargetGroupArn": {
+      "Description": "ARN of the Target Group",
+      "Value": {
+        "Ref": "TargetGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TargetGroupArn"
+        }
+      }
+    },
+    "InstanceSGExport": {
+      "Description": "Exported Instance Security Group ID",
+      "Value": {
+        "Ref": "InstanceSG"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-InstanceSG"
+        }
+      }
+    }
+  }
+}
+

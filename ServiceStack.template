@@ -1,0 +1,138 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Service stack for deploying ECS services and tasks",
+  "Parameters": {
+    "ClusterName": {
+      "Type": "String",
+      "Description": "ECS Cluster Name",
+      "Default": "Wordpress_cluster"
+    },
+    "ServiceName": {
+      "Type": "String",
+      "Description": "ECS Service Name",
+      "Default": "Wordpress_service"
+    },
+    "DesiredCount": {
+      "Type": "Number",
+      "Description": "Desired number of ECS tasks",
+      "Default": 1
+    },
+    "NetworkStack": {
+      "Type": "String",
+      "Description": "Name of the network stack",
+      "Default": "NetworkStack"
+    },
+    "DatabaseName": {
+      "Type": "String",
+      "Description": "The WordPress database name",
+      "Default": "wordpressdb"
+    },
+    "DatabaseUser": {
+      "Type": "String",
+      "Description": "The WordPress database admin account username",
+      "Default": "admin",
+      "NoEcho": true
+    },
+    "DatabasePassword": {
+      "Type": "String",
+      "Description": "The WordPress database admin account password",
+      "NoEcho": true,
+      "Default": "MayankPratap"
+    },
+    "DatabaseEndpoint": {
+      "Type": "String",
+      "Description": "The endpoint address of the RDS database instance",
+      "Default": "basestack-rdsinstance-kq1ugbobry6g.cofej4iwdwwk.us-east-1.rds.amazonaws.com"
+    },
+    "BaseStack": {
+      "Type": "String",
+      "Description": "Name of the base stack",
+      "Default": "BaseStack"
+    }
+  },
+  "Resources": {
+    "TaskDefinition": {
+      "Type": "AWS::ECS::TaskDefinition",
+      "Properties": {
+        "Family": "wordpress",
+        "NetworkMode": "bridge",
+        "ContainerDefinitions": [
+          {
+            "Name": "wordpress",
+            "Image": "wordpress:latest",
+            "Essential": true,
+            "PortMappings": [
+              {
+                "ContainerPort": 80,
+                "HostPort": 80
+              }
+            ],
+            "Environment": [
+              {
+                "Name": "WORDPRESS_DB_NAME",
+                "Value": { "Ref": "DatabaseName" }
+              },
+              {
+                "Name": "WORDPRESS_DB_USER",
+                "Value": { "Ref": "DatabaseUser" }
+              },
+              {
+                "Name": "WORDPRESS_DB_PASSWORD",
+                "Value": { "Ref": "DatabasePassword" }
+              },
+              {
+                "Name": "WORDPRESS_DB_HOST",
+                "Value": { "Ref": "DatabaseEndpoint" }
+              }
+            ]
+          }
+        ],
+        "RequiresCompatibilities": [ "EC2" ],
+        "Cpu": "256",
+        "Memory": "512"
+      }
+    },
+    "ECSService": {
+      "Type": "AWS::ECS::Service",
+      "Properties": {
+        "Cluster": {
+          "Ref": "ClusterName"
+        },
+        "ServiceName": {
+          "Ref": "ServiceName"
+        },
+        "TaskDefinition": {
+          "Ref": "TaskDefinition"
+        },
+        "DesiredCount": {
+          "Ref": "DesiredCount"
+        },
+        "LoadBalancers": [
+          {
+            "TargetGroupArn": {
+              "Fn::ImportValue": {
+                "Fn::Sub": "${BaseStack}-TargetGroupArn"
+              }
+            },
+            "ContainerName": "wordpress",
+            "ContainerPort": 80
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "ECSServiceName": {
+      "Description": "Name of the ECS Service",
+      "Value": {
+        "Ref": "ECSService"
+      }
+    },
+    "TaskDefinitionArn": {
+      "Description": "ARN of the ECS Task Definition",
+      "Value": {
+        "Ref": "TaskDefinition"
+      }
+    }
+  }
+}
